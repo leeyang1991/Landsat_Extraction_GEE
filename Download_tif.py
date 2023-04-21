@@ -3,7 +3,7 @@ from __init__ import *
 import ee
 from Preprocess import *
 import math
-import geemap
+# import geemap
 # exit()
 
 this_script_root = join(this_root, 'Download_tif')
@@ -26,39 +26,25 @@ class Download_tif:
             ur = geo.bounds[2:4]
             region = ee.Geometry.Rectangle(ll[0],ll[1],ur[0],ur[1])
             startDate = '2020-06-01'
-            endDate = '2020-7-31'
+            endDate = '2020-6-15'
             l8 = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+            # l8 = ee.ImageCollection('LANDSAT/LC08/C01/T1_SR')
             l8 = l8.filterDate(startDate, endDate).filterBounds(region)
+            # l8 = l8.median()
+            # l8_qa = l8.select(['QA_PIXEL'])
             l8_optical_bands = l8.select('SR_B.').median().multiply(0.0000275).add(-0.2)
-            cloudScore = ee.Algorithms.Landsat.simpleCloudScore(l8.select(['QA_PIXEL']))
+            l8_qa_band = l8.select('QA_PIXEL').select([0]).median()
+            # print(l8_qa_band.getInfo())
             # exit()
-            print(print('Cloud score layer:', cloudScore.getInfo()))
-            exit()
-            # masked = l8_optical_bands.updateMask(scored.Not())
-            # print(cloudy_scene)
-            # exit()
-            # cloudy_scene = cloudy_scene.rename('cloudy_scene')
-            # l8_optical_bands_mask_cloud = l8_optical_bands
-            # l8_optical_bands = l8_optical_bands.multiply(0.0000275).add(-0.2)
-            # l8 = l8.map(lambda image: ee.Algorithms.Landsat.simpleCloudScore(image).select(['ST_CDIST']).lt(20).multiply(10000).toInt16().
-            #             addBands(ee.Algorithms.Landsat.simpleCloudScore(image).select(['ST_CDIST']).lt(20).Not().rename('mask')).float(). \
-            #             addBands(image.select(['SR_B1']).multiply(0.0001).multiply(math.pi).divide(ee.Algorithms.Landsat.calibratedRadiance(image)).multiply(10000).toInt16()) \
-            #             .updateMask(image.select(['SR_B1']).multiply(0.0001).multiply(math.pi).divide(ee.Algorithms.Landsat.calibratedRadiance(image)).reduce(ee.Reducer.min()).gt(0.0))
-            #             )
+            # l8_cloud_mask = self.mask_clouds(l8_optical_bands,l8_qa_band)
+            l8_cloud_mask = l8_optical_bands
             exportOptions = {
                 'scale': 30,
                 'maxPixels': 1e13,
                 'region': region
             }
-            # image = ee.Image(l8.first())
-            # band_image = l8_optical_bands.select('SR_B3')
-            # bands = band_image.bandNames().getInfo()
-            #
-            # # 打印波段列表
-            # print('Band names:', bands)
-            # exit()
             # url = l8_optical_bands.getDownloadURL(exportOptions)
-            url = masked.getDownloadURL(exportOptions)
+            url = l8_cloud_mask.getDownloadURL(exportOptions)
             print(url)
             exit()
 
@@ -78,6 +64,33 @@ class Download_tif:
             # task.start()
             pass
 
+    def cloud_shadows(self,image):
+        # QA = image.select(['pixel_qa'])
+        QA = image.select(['QA_PIXEL'])
+        return self.getQABits(QA, 3, 3, 'cloud_shadows').eq(0)
+        pass
+
+    def getQABits(self,image, start, end, newName):
+        pattern = 0
+        image = image.int()
+        # e
+        # make image type int
+        # image = image.toInt16()
+        for i in range(start, end + 1):
+            pattern += math.pow(2, i)
+            # print(pattern)
+        return image.select([0], [newName]).bitwiseAnd(int(pattern)).rightShift(start)
+
+    def clouds(self,image):
+        QA = image.select(['QA_PIXEL'])
+        return self.getQABits(QA, 5, 5, 'clouds').eq(0)
+
+    def mask_clouds(self,image,image_qa):
+        # image_qa,image = params
+        cs = self.cloud_shadows(image_qa)
+        c = self.clouds(image_qa)
+        image = image.updateMask(cs).updateMask(c)
+        return image
 
 class GEE_MAP:
     def __init__(self):

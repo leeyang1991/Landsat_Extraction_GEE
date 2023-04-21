@@ -2,8 +2,9 @@
 import sys
 version = sys.version_info.major
 assert version == 3, 'Python Version Error'
-this_root = '/Volumes/NVME2T/Xia_project/'
-data_root = '/Volumes/NVME2T/Xia_project/data/'
+# this_root = '/Volumes/NVME2T/Xia_project/'
+this_root = '/Users/liyang/Desktop/Xia_project/'
+data_root = this_root + 'data/'
 from lytools import *
 from matplotlib import pyplot as plt
 import numpy as np
