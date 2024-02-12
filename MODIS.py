@@ -112,12 +112,10 @@ class MODIS_LAI:
 
     def run(self):
 
-        # self.RGB_compose()
-        # self.count_image_number()
-        # self.download_images()
+        self.download_images()
         # self.unzip()
         # self.reproj()
-        self.statistic()
+        # self.statistic()
         pass
 
     def download_images(self):
@@ -206,73 +204,6 @@ class MODIS_LAI:
             outdir_i = join(outdir,folder)
             T.unzip(fdir_i,outdir_i)
         pass
-
-
-    def cloud_shadows(self,image):
-        # QA = image.select(['pixel_qa'])
-        QA = image.select(['QA_PIXEL'])
-        return self.getQABits(QA, 4, 4, 'cloud_shadows').eq(0)
-        pass
-
-    def snow(self,image):
-        # QA = image.select(['pixel_qa'])
-        QA = image.select(['QA_PIXEL'])
-        return self.getQABits(QA, 4, 4, 'cloud_shadows').eq(0)
-        pass
-
-
-    def getQABits(self,image, start, end, newName):
-        pattern = 0
-        image = image.int()
-        # e
-        # make image type int
-        # image = image.toInt16()
-        for i in range(start, end + 1):
-            pattern += math.pow(2, i)
-            # print(pattern)
-        return image.select([0], [newName]).bitwiseAnd(int(pattern)).rightShift(start)
-
-    def clouds(self,image):
-        QA = image.select(['QA_PIXEL'])
-        return self.getQABits(QA, 3, 3, 'clouds').eq(0)
-
-    def mask_clouds(self,image,image_qa):
-        # image_qa,image = params
-        cs = self.cloud_shadows(image_qa)
-        c = self.clouds(image_qa)
-        s = self.snow(image_qa)
-        image = image.updateMask(cs).updateMask(c).updateMask(s)
-        return image
-
-
-    def RGB_compose(self):
-        # fdir = '/Users/liyang/Downloads/download-4'
-        fdir = '/Users/liyang/Downloads/download-5'
-        red = join(fdir,'download.SR_B4.tif')
-        green = join(fdir,'download.SR_B3.tif')
-        blue = join(fdir,'download.SR_B2.tif')
-
-        red_band = gdal.Open(red)
-        green_band = gdal.Open(green)
-        blue_band = gdal.Open(blue)
-
-        width = red_band.RasterXSize
-        height = red_band.RasterYSize
-
-        driver = gdal.GetDriverByName('GTiff')
-        out = driver.Create(join(fdir,'RGB.tif'),width,height,3,gdal.GDT_Float32)
-
-        out.GetRasterBand(1).WriteArray(red_band.GetRasterBand(1).ReadAsArray())
-        out.GetRasterBand(2).WriteArray(green_band.GetRasterBand(1).ReadAsArray())
-        out.GetRasterBand(3).WriteArray(blue_band.GetRasterBand(1).ReadAsArray())
-
-        out.SetProjection(red_band.GetProjection())
-        out.SetGeoTransform(red_band.GetGeoTransform())
-
-        red_band = None
-        green_band = None
-        blue_band = None
-        out = None
 
     def wkt(self):
         wkt = '''
