@@ -366,7 +366,8 @@ class Analysis:
         pass
 
     def run(self):
-        self.plot()
+        # self.plot()
+        self.plot_uncertain()
 
         pass
 
@@ -417,6 +418,63 @@ class Analysis:
             plt.ylim(0,1)
             # plt.grid()
             outf = join(outdir,f'{site}.pdf')
+            # plt.savefig(outf)
+            # plt.close()
+            plt.show()
+        T.open_path_and_file(outdir)
+
+        pass
+
+    def plot_uncertain(self):
+        outdir = join(self.this_class_png,'plot_uncertain')
+        T.mk_dir(outdir)
+        dff = join(MODIS_NDVI_Extraction().this_class_arr,'extract/MODIS_NDVI.df')
+        df = T.load_df(dff)
+        # T.print_head_n(df)
+        sites_list = df.columns.tolist()
+        centimeter_factor = 1/2.54
+
+        for site in sites_list:
+            vals = df[site]
+            date = df.index
+            year_list = []
+            for i in date:
+                year_list.append(i.year)
+            year_list = list(set(year_list))
+            year_list.sort()
+            year_list.pop(0)
+
+            vals_list = []
+            plt.figure(figsize=(7*centimeter_factor,5*centimeter_factor))
+            for year in year_list:
+                vals_i = []
+                date_list_i = []
+                for i in date:
+                    if i.year == year:
+                        vals_i.append(vals[i] / 10000.)
+                        month = i.month
+                        day = i.day
+                        date_i = datetime.datetime(2000,month,day)
+                        delta_i = date_i - datetime.datetime(2000,1,1)
+                        date_list_i.append(delta_i.days)
+                vals_list.append(vals_i)
+                # plt.plot(date_list_i,vals_i,c='gray',alpha=.5)
+            # vals_list = np.array(vals_list)
+            # pprint(vals_list)
+            # exit()
+            # plt.imshow(vals_list,aspect='auto',cmap='jet')
+            # plt.show()
+            vals_list_mean = np.nanmean(vals_list,axis=0)
+            vals_list_max = np.nanmax(vals_list,axis=0)
+            vals_list_min = np.nanmin(vals_list,axis=0)
+            plt.plot(date_list_i,vals_list_mean,c='black',lw=3)
+            plt.fill_between(date_list_i,vals_list_max,vals_list_min,color='gray',alpha=.5)
+            plt.xlabel('DoY')
+            plt.ylabel('NDVI')
+            plt.title(site)
+            plt.ylim(0,1)
+            # plt.grid()
+            outf = join(outdir,f'{site}.pdf')
             plt.savefig(outf)
             plt.close()
             # plt.show()
@@ -425,9 +483,9 @@ class Analysis:
         pass
 
 def main():
-    Expand_points_to_rectangle().run()
+    # Expand_points_to_rectangle().run()
     # MODIS_NDVI_Extraction().run()
-    # Analysis().run()
+    Analysis().run()
     pass
 
 
