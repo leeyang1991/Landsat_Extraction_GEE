@@ -586,9 +586,207 @@ class MODIS_GPP:
     UNIT["Meter",1.0]]'''
         return wkt
 
+class MODIS_GPP_annual_mean:
+
+    def __init__(self):
+        self.datadir = join(data_root, 'MODIS_GPP_long_term_mean')
+
+    def run(self):
+        self.download_images()
+        # self.unzip()
+        # self.merge()
+        # self.reproj()
+        pass
+
+    def download_images(self):
+        ee.Initialize()
+
+        startDate = '2001-01-01'
+        endDate = '2023-1-1'
+        resolution = 500 # meter
+        band_name = 'Gpp'
+        product_name = 'MODIS/061/MOD17A2HGF'
+        outdir = join(self.datadir,'download_images')
+        T.mk_dir(outdir,force=True)
+
+        Collection = ee.ImageCollection(product_name)
+        Collection = Collection.filterDate(startDate, endDate)
+        longterm_average_Image = Collection.reduce(ee.Reducer.mean())
+        Image_band = longterm_average_Image.select(f'{band_name}_mean')
+        # region_list = self.rectangle(rect=[-180, 90, 180, -90],block_res=15)
+        region_list = self.rectangle(rect=[-127, 50, -65, 23],block_res=2)
+        flag = 1
+        params_list = []
+        outdir_i = join(outdir,f'{startDate}_{endDate}')
+        T.mk_dir(outdir_i,force=True)
+        for region in tqdm(region_list):
+            params_i = [resolution,region,Image_band,outdir_i,flag]
+            params_list.append(params_i)
+            flag += 1
+        MULTIPROCESS(self.kernel_download,params_list).run(process_or_thread='t',process=10)
+
+        pass
+
+    def kernel_download(self,params):
+        resolution,region,l8_optical_bands,outdir_i,flag = params
+        outf_name = join(outdir_i, f'{flag}.zip')
+        if isfile(outf_name):
+            return
+
+        # print(region)
+        exportOptions = {
+            'scale': resolution,
+            'region': region,
+        }
+        url = l8_optical_bands.getDownloadURL(exportOptions)
+        try:
+            self.download_i(url, outf_name)
+        except:
+            print('download error', outf_name)
+
+    def rectangle(self,rect=(-180, 90, 180, -90),block_res=90):
+        rect_list = []
+        lon_start = rect[0]
+        lat_start = rect[3]
+        lon_end = rect[2]
+        lat_end = rect[1]
+        for lon in np.arange(lon_start, lon_end, block_res):
+            for lat in np.arange(lat_start, lat_end, block_res):
+                rect_i = [lon, lat, lon + block_res, lat + block_res]
+                # print(rect_i)
+                rect_i_new = [rect_i[0], rect_i[3], rect_i[2], rect_i[1]]
+                rect_i_new = [float(i) for i in rect_i_new]
+                # exit()
+                rect_list.append(rect_i_new)
+        # print(rect_list)
+        # print('len(rect_list)', len(rect_list))
+        rect_list_obj = []
+        for rect_i in rect_list:
+            # print(rect_i)
+            rect_i_obj = ee.Geometry.Rectangle(rect_i[0], rect_i[1], rect_i[2], rect_i[3])
+            # rect_i_obj = ee.Geometry.Rectangle(rect_i[0], rect_i[1], rect_i[2], rect_i[3])
+            rect_list_obj.append(rect_i_obj)
+        return rect_list_obj
+
+
+    def download_i(self,url,outf):
+        # try:
+        http = urllib3.PoolManager()
+        r = http.request('GET', url, preload_content=False)
+        body = r.read()
+        with open(outf, 'wb') as f:
+            f.write(body)
+
+    def unzip(self):
+        fdir = join(self.datadir,r'download_images')
+        outdir = join(self.datadir,r'unzip')
+        T.mk_dir(outdir,force=True)
+        for folder in T.listdir(fdir):
+            print(folder)
+            fdir_i = join(fdir,folder)
+            outdir_i = join(outdir,folder)
+            self._unzip(fdir_i,outdir_i)
+        pass
+
+    def _unzip(self, zipfolder, outdir):
+        # zipfolder = join(self.datadir,'zips')
+        # outdir = join(self.datadir,'unzip')
+        T.mkdir(outdir)
+        for f in tqdm(T.listdir(zipfolder)):
+            outdir_i = join(outdir, f.replace('.zip', ''))
+            T.mkdir(outdir_i)
+            fpath = join(zipfolder, f)
+            # print(fpath)
+            zip_ref = zipfile.ZipFile(fpath, 'r')
+            zip_ref.extractall(outdir_i)
+            zip_ref.close()
+
+    def merge(self):
+        fdir = join(self.datadir,r'unzip')
+        outdir = join(self.datadir,r'merge')
+        T.mk_dir(outdir,force=True)
+        for date in tqdm(T.listdir(fdir)):
+            fdir_i = join(fdir,date)
+            fpath_list = []
+            for folder in T.listdir(fdir_i):
+                fdir_i_i = join(fdir_i,folder)
+                for f in T.listdir(fdir_i_i):
+                    if not f.endswith('.tif'):
+                        continue
+                    fpath = join(fdir_i_i,f)
+                    fpath_list.append(fpath)
+            srcSRS = DIC_and_TIF().gen_srs_from_wkt(self.wkt_84())
+            # srcSRS = DIC_and_TIF().gen_srs_from_wkt(self.wkt_sin())
+            outf = join(outdir,f'{date}.tif')
+            if isfile(outf):
+                continue
+            gdal.Warp(outf,fpath_list,srcSRS=srcSRS, outputType=gdal.GDT_Int32)
+
+        pass
+
+    def reproj(self):
+        fdir = join(self.datadir,r'merge')
+        outdir = join(self.datadir,r'reproj')
+        T.mk_dir(outdir,force=True)
+        for f in T.listdir(fdir):
+            if not f.endswith('.tif'):
+                continue
+            fpath = join(fdir,f)
+            outpath = join(outdir,f)
+            SRS = DIC_and_TIF().gen_srs_from_wkt(self.wkt())
+            ToRaster().resample_reproj(fpath,outpath,0.08333,srcSRS=SRS, dstSRS='EPSG:4326')
+        pass
+
+    def wkt_sin(self): # Sinusoidal
+        wkt = '''
+        PROJCS["Sinusoidal",
+    GEOGCS["GCS_Undefined",
+        DATUM["Undefined",
+            SPHEROID["User_Defined_Spheroid",6371007.181,0.0]],
+        PRIMEM["Greenwich",0.0],
+        UNIT["Degree",0.0174532925199433]],
+    PROJECTION["Sinusoidal"],
+    PARAMETER["False_Easting",0.0],
+    PARAMETER["False_Northing",0.0],
+    PARAMETER["Central_Meridian",0.0],
+    UNIT["Meter",1.0]]'''
+        return wkt
+
+    def wkt_84(self):
+        wkt_str = '''GEOGCRS["WGS 84",
+    ENSEMBLE["World Geodetic System 1984 ensemble",
+        MEMBER["World Geodetic System 1984 (Transit)"],
+        MEMBER["World Geodetic System 1984 (G730)"],
+        MEMBER["World Geodetic System 1984 (G873)"],
+        MEMBER["World Geodetic System 1984 (G1150)"],
+        MEMBER["World Geodetic System 1984 (G1674)"],
+        MEMBER["World Geodetic System 1984 (G1762)"],
+        MEMBER["World Geodetic System 1984 (G2139)"],
+        ELLIPSOID["WGS 84",6378137,298.257223563,
+            LENGTHUNIT["metre",1]],
+        ENSEMBLEACCURACY[2.0]],
+    PRIMEM["Greenwich",0,
+        ANGLEUNIT["degree",0.0174532925199433]],
+    CS[ellipsoidal,2],
+        AXIS["geodetic latitude (Lat)",north,
+            ORDER[1],
+            ANGLEUNIT["degree",0.0174532925199433]],
+        AXIS["geodetic longitude (Lon)",east,
+            ORDER[2],
+            ANGLEUNIT["degree",0.0174532925199433]],
+    USAGE[
+        SCOPE["Horizontal component of 3D system."],
+        AREA["World."],
+        BBOX[-90,-180,90,180]],
+    ID["EPSG",4326]]'''
+        return wkt_str
+
 def main():
     # Expand_points_to_rectangle().run()
     MODIS_LAI().run()
+    # MODIS_LAI().run()
+    # MODIS_GPP().run()
+    MODIS_GPP_annual_mean().run()
     pass
 
 if __name__ == '__main__':
