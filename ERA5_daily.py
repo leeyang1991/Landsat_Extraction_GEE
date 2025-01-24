@@ -171,33 +171,42 @@ class ERA5_hourly:
 
     def run(self):
         ee.Initialize()
-        date_range_list = self.gen_date_list(start_date = '2020-01-01',end_date = '2023-01-02')
+        date_range_list = self.gen_date_list(start_date = '1982-01-01',end_date = '2023-01-02')
         outdir = join(self.this_class_arr,self.product)
 
+        params_list = []
         for date_range in tqdm(date_range_list):
             startDate = date_range[0]
             endDate = date_range[1]
-            self.download_images(startDate,endDate,outdir)
+            params = [startDate,endDate,outdir]
+            params_list.append(params)
+            # self.download_images(startDate,endDate,outdir)
+
+        MULTIPROCESS(self.download_images,params_list).run(process=10,process_or_thread='t')
+
+
+
         # self.unzip()
         # self.reproj()
         # self.statistic()
         pass
 
-    def download_images(self,startDate,endDate,outdir):
+    def download_images(self,params):
+        startDate, endDate, outdir = params
         start_year = startDate.split('-')[0]
         outdir_mean = join(outdir, 'mean',start_year)
-        outdir_max = join(outdir, 'max',start_year)
-        outdir_min = join(outdir, 'min',start_year)
+        # outdir_max = join(outdir, 'max',start_year)
+        # outdir_min = join(outdir, 'min',start_year)
 
         T.mk_dir(outdir_mean,force=True)
-        T.mk_dir(outdir_max,force=True)
-        T.mk_dir(outdir_min,force=True)
+        # T.mk_dir(outdir_max,force=True)
+        # T.mk_dir(outdir_min,force=True)
         # print(startDate)
         # exit()
 
         out_path_mean = join(outdir_mean, f'{startDate.replace("-","")}.zip')
-        out_path_max = join(outdir_max, f'{startDate.replace("-","")}.zip')
-        out_path_min = join(outdir_min, f'{startDate.replace("-","")}.zip')
+        # out_path_max = join(outdir_max, f'{startDate.replace("-","")}.zip')
+        # out_path_min = join(outdir_min, f'{startDate.replace("-","")}.zip')
         T.mk_dir(outdir,force=True)
         # startDate = f'{year}-01-01'
         # endDate = f'{year+1}-01-01'
@@ -208,11 +217,12 @@ class ERA5_hourly:
         Collection = Collection.filterDate(startDate, endDate)
         # Image = Collection.mean()
         Image_product_mean = Collection.select(self.product).mean()
-        Image_product_max = Collection.select(self.product).max()
-        Image_product_min = Collection.select(self.product).min()
+        # Image_product_max = Collection.select(self.product).max()
+        # Image_product_min = Collection.select(self.product).min()
 
         exportOptions = {
-            'scale': 27830,
+            # 'scale': 27830,
+            'scale': 27830*2,
             # 'scale': 11132,
             'maxPixels': 1e13,
             # 'region': region,
@@ -220,15 +230,16 @@ class ERA5_hourly:
             # 'description': 'imageToAssetExample',
         }
         url_mean = Image_product_mean.getDownloadURL(exportOptions)
-        url_max = Image_product_max.getDownloadURL(exportOptions)
-        url_min = Image_product_min.getDownloadURL(exportOptions)
+        # url_max = Image_product_max.getDownloadURL(exportOptions)
+        # url_min = Image_product_min.getDownloadURL(exportOptions)
 
         try:
             self.download_i(url_mean, out_path_mean)
-            self.download_i(url_max, out_path_max)
-            self.download_i(url_min, out_path_min)
+            # self.download_i(url_max, out_path_max)
+            # self.download_i(url_min, out_path_min)
         except:
-            print('download error', out_path_mean, out_path_max, out_path_min)
+            # print('download error', out_path_mean, out_path_max, out_path_min)
+            print('download error', out_path_mean)
 
         # info_dict = Collection.getInfo()
         # pprint.pprint(info_dict)
@@ -272,12 +283,14 @@ class ERA5_hourly:
 
 
     def download_i(self,url,outf):
-        # try:
-        http = urllib3.PoolManager()
-        r = http.request('GET', url, preload_content=False)
-        body = r.read()
-        with open(outf, 'wb') as f:
-            f.write(body)
+        try:
+            zip_ref = zipfile.ZipFile(outf, 'r')
+        except:
+            http = urllib3.PoolManager()
+            r = http.request('GET', url, preload_content=False)
+            body = r.read()
+            with open(outf, 'wb') as f:
+                f.write(body)
 
     def unzip(self):
         fdir = join(self.this_class_arr,self.product)

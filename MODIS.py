@@ -592,9 +592,9 @@ class MODIS_GPP_annual_mean:
         self.datadir = join(data_root, 'MODIS_GPP_long_term_mean')
 
     def run(self):
-        self.download_images()
+        # self.download_images()
         # self.unzip()
-        # self.merge()
+        self.merge()
         # self.reproj()
         pass
 
@@ -783,7 +783,6 @@ class MODIS_GPP_annual_mean:
 
 def main():
     # Expand_points_to_rectangle().run()
-    MODIS_LAI().run()
     # MODIS_LAI().run()
     # MODIS_GPP().run()
     MODIS_GPP_annual_mean().run()
