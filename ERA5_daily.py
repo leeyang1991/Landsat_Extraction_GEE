@@ -1,4 +1,6 @@
 # coding=utf-8
+import os
+
 import matplotlib.pyplot as plt
 import urllib3
 from __init__ import *
@@ -17,15 +19,20 @@ class ERA5_daily:
         self.this_class_arr, self.this_class_tif, self.this_class_png = T.mk_class_dir(
             'ERA5_daily',
             this_script_root, mode=2)
-        # self.product = 'mean_2m_air_temperature'
-        self.product = 'total_precipitation'
-        ee.Initialize()
+        self.product = 'temperature_2m'
+        # self.product = 'total_precipitation'
+        ee.Initialize(project='lyfq-263413')
+        # ee.Authenticate()
+        # pause()
+        # exit()
 
     def run(self):
-        for year in range(2020,2021):
-            self.download_images(year)
-        # self.download_images()
-        # self.unzip()
+        # year_list = list(range(1982,2021))
+        # MULTIPROCESS(self.download_images,year_list).run(process=10,process_or_thread='t')
+        # for year in range(1982,2021):
+        #     self.download_images(year)
+        # self.check()
+        self.unzip()
         # self.reproj()
         # self.statistic()
         pass
@@ -35,7 +42,7 @@ class ERA5_daily:
         T.mk_dir(outdir,force=True)
         startDate = f'{year}-01-01'
         endDate = f'{year+1}-01-01'
-        Collection = ee.ImageCollection('ECMWF/ERA5/DAILY')
+        Collection = ee.ImageCollection('ECMWF/ERA5_LAND/DAILY_AGGR')
         # l8 = ee.ImageCollection('LANDSAT/LC08/C01/T1_SR')
         Collection = Collection.filterDate(startDate, endDate)
 
@@ -64,7 +71,7 @@ class ERA5_daily:
             # Image_product = Image.select('total_precipitation')
             Image_product = Image.select(self.product)
             exportOptions = {
-                'scale': 27830,
+                'scale': 27830*2,
                 'maxPixels': 1e13,
                 # 'region': region,
                 # 'fileNamePrefix': 'exampleExport',
@@ -95,12 +102,31 @@ class ERA5_daily:
         outdir = join(self.this_class_arr,'unzip',self.product)
         T.mk_dir(outdir,force=True)
         for folder in T.listdir(fdir):
+            print(folder)
             fdir_i = join(fdir,folder)
             # T.open_path_and_file(fdir_i,folder)
             # exit()
             outdir_i = join(outdir,folder)
             T.unzip(fdir_i,outdir_i)
         pass
+
+    def check(self):
+        fdir = join(self.this_class_arr, self.product)
+        outdir = join(self.this_class_arr, 'unzip', self.product)
+        T.mk_dir(outdir, force=True)
+        for folder in T.listdir(fdir):
+            fdir_i = join(fdir, folder)
+            for f in tqdm(T.listdir(fdir_i),desc=folder):
+                fpath = join(fdir_i, f)
+                try:
+                    zipfile.ZipFile(fpath, 'r')
+                except:
+                    os.remove(fpath)
+                    print(fpath)
+                    continue
+                pass
+        pass
+
 
     def wkt(self):
         wkt = '''
@@ -543,9 +569,9 @@ class ERA5_hourly_Precip:
 
 
 def main():
-    # ERA5_daily().run()
+    ERA5_daily().run()
     # ERA5_hourly().run()
-    ERA5_hourly_Precip().run()
+    # ERA5_hourly_Precip().run()
     pass
 
 if __name__ == '__main__':
