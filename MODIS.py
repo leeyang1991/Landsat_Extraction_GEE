@@ -1,4 +1,6 @@
 # coding=utf-8
+import turtle
+
 import urllib3
 from __init__ import *
 import ee
@@ -781,11 +783,176 @@ class MODIS_GPP_annual_mean:
     ID["EPSG",4326]]'''
         return wkt_str
 
+class MODIS_NDVI:
+
+    def __init__(self):
+        self.this_class_arr, self.this_class_tif, self.this_class_png = T.mk_class_dir(
+            'NDVI',
+            this_script_root, mode=2)
+        self.product = 'NDVI'
+        # self.product = 'total_precipitation'
+        ee.Initialize(project='lyfq-263413')
+        # ee.Authenticate()
+        # pause()
+        # exit()
+
+    def run(self):
+        # year_list = list(range(2000,2021))
+        # MULTIPROCESS(self.download_images,year_list).run(process=10,process_or_thread='t')
+        # for year in range(2000,2021):
+        #     self.download_images(year)
+        # self.check()
+        # self.unzip()
+        # self.reproj()
+        self.statistic()
+        pass
+
+    def download_images(self,year=1982):
+        outdir = join(self.this_class_arr,self.product,str(year))
+        T.mk_dir(outdir,force=True)
+        startDate = f'{year}-01-01'
+        endDate = f'{year+1}-01-01'
+        Collection = ee.ImageCollection('MODIS/061/MOD13A2')
+        Collection = Collection.filterDate(startDate, endDate)
+
+        info_dict = Collection.getInfo()
+        # pprint.pprint(info_dict)
+        # print(len(info_dict['features']))
+        # exit()
+        # for key in info_dict:
+        #     print(key)
+        ids = info_dict['features']
+        for i in ids:
+            dict_i = eval(str(i))
+            # pprint.pprint(dict_i['id'])
+            # exit()
+            outf_name = dict_i['id'].split('/')[-1] + '.zip'
+            out_path = join(outdir, outf_name)
+            if isfile(out_path):
+                continue
+            # print(outf_name)
+            # exit()
+            # print(dict_i['id'])
+            # l8 = l8.median()
+            # l8_qa = l8.select(['QA_PIXEL'])
+            # l8_i = ee.Image(dict_i['LANDSAT/LC08/C02/T1_L2/LC08_145037_20200712'])
+            Image = ee.Image(dict_i['id'])
+            # Image_product = Image.select('total_precipitation')
+            Image_product = Image.select(['NDVI'])
+            # print(Image_product);exit()
+            region = [-180, -90, 180, 90]
+            exportOptions = {
+                'scale': 27830,
+                'maxPixels': 1e13,
+                'region': region,
+                # 'fileNamePrefix': 'exampleExport',
+                # 'description': 'imageToAssetExample',
+            }
+            url = Image_product.getDownloadURL(exportOptions)
+            # print(url)
+
+            try:
+                self.download_i(url, out_path)
+            except:
+                print('download error', out_path)
+                continue
+        pass
+
+
+
+
+    def download_i(self,url,outf):
+        # try:
+        http = urllib3.PoolManager()
+        r = http.request('GET', url, preload_content=False)
+        body = r.read()
+        with open(outf, 'wb') as f:
+            f.write(body)
+
+    def unzip(self):
+        fdir = join(self.this_class_arr,self.product)
+        outdir = join(self.this_class_arr,'unzip',self.product)
+        T.mk_dir(outdir,force=True)
+        for folder in T.listdir(fdir):
+            print(folder)
+            fdir_i = join(fdir,folder)
+            # T.open_path_and_file(fdir_i,folder)
+            # exit()
+            outdir_i = join(outdir,folder)
+            T.unzip(fdir_i,outdir_i)
+        pass
+
+    def check(self):
+        fdir = join(self.this_class_arr, self.product)
+        # outdir = join(self.this_class_arr, 'unzip', self.product)
+        # T.mk_dir(outdir, force=True)
+        for folder in T.listdir(fdir):
+            fdir_i = join(fdir, folder)
+            for f in tqdm(T.listdir(fdir_i),desc=folder):
+                fpath = join(fdir_i, f)
+                try:
+                    zipfile.ZipFile(fpath, 'r')
+                except:
+                    os.remove(fpath)
+                    print(fpath)
+                    continue
+                pass
+        pass
+
+
+    def wkt(self):
+        wkt = '''
+        PROJCS["Sinusoidal",
+    GEOGCS["GCS_Undefined",
+        DATUM["Undefined",
+            SPHEROID["User_Defined_Spheroid",6371007.181,0.0]],
+        PRIMEM["Greenwich",0.0],
+        UNIT["Degree",0.0174532925199433]],
+    PROJECTION["Sinusoidal"],
+    PARAMETER["False_Easting",0.0],
+    PARAMETER["False_Northing",0.0],
+    PARAMETER["Central_Meridian",0.0],
+    UNIT["Meter",1.0]]'''
+        return wkt
+
+    def reproj(self):
+        fdir = join(self.this_class_arr,'unzip',self.product)
+        outdir = join(self.this_class_arr,'reproj',self.product)
+        T.mk_dir(outdir,force=True)
+        for year in tqdm(T.listdir(fdir)):
+            for date in T.listdir(join(fdir,year)):
+                for f in T.listdir(join(fdir,year,date)):
+                    fpath = join(fdir,year,date,f)
+                    date_str = f.split('.')[0]
+                    y,m,d = date_str.split('_')
+                    # print(fpath);exit()
+                    outpath = join(outdir,f'{y}{m}{d}.tif')
+                    # print(outpath)
+                    SRS = DIC_and_TIF().gen_srs_from_wkt(self.wkt())
+                    wkg_wgs84 = DIC_and_TIF().wkt_84()
+                    ToRaster().resample_reproj(fpath,outpath,.25,srcSRS=SRS, dstSRS=wkg_wgs84)
+                    # exit()
+
+    def statistic(self):
+        fdir = join(self.this_class_arr,'reproj',self.product)
+        statistic_dict = {}
+        for f in T.listdir(fdir):
+            date = f.split('.')[0]
+            year,mon,day = date[:4],date[4:6],date[6:]
+            if not year in statistic_dict:
+                statistic_dict[year] = []
+            statistic_dict[year].append(f)
+        for year in statistic_dict:
+            flist = statistic_dict[year]
+            print(year,len(flist))
+
+
 def main():
     # Expand_points_to_rectangle().run()
     # MODIS_LAI().run()
     # MODIS_GPP().run()
-    MODIS_GPP_annual_mean().run()
+    MODIS_NDVI().run()
+    # MODIS_GPP_annual_mean().run()
     pass
 
 if __name__ == '__main__':
