@@ -787,7 +787,7 @@ class MODIS_NDVI:
 
     def __init__(self):
         self.this_class_arr, self.this_class_tif, self.this_class_png = T.mk_class_dir(
-            'NDVI',
+            'NDVI_250m_bighorn',
             this_script_root, mode=2)
         self.product = 'NDVI'
         # self.product = 'total_precipitation'
@@ -797,14 +797,16 @@ class MODIS_NDVI:
         # exit()
 
     def run(self):
-        # year_list = list(range(2000,2021))
+        # year_list = list(range(2020,2025))
         # MULTIPROCESS(self.download_images,year_list).run(process=10,process_or_thread='t')
-        # for year in range(2000,2021):
+        # for year in range(2000,2025):
+        #     print(year)
         #     self.download_images(year)
         # self.check()
         # self.unzip()
         # self.reproj()
-        self.statistic()
+        self.clip()
+        # self.statistic()
         pass
 
     def download_images(self,year=1982):
@@ -840,9 +842,9 @@ class MODIS_NDVI:
             # Image_product = Image.select('total_precipitation')
             Image_product = Image.select(['NDVI'])
             # print(Image_product);exit()
-            region = [-180, -90, 180, 90]
+            region = [-111, 32.2, -110, 32.6]# left, bottom, right, top
             exportOptions = {
-                'scale': 27830,
+                'scale': 250,
                 'maxPixels': 1e13,
                 'region': region,
                 # 'fileNamePrefix': 'exampleExport',
@@ -930,8 +932,27 @@ class MODIS_NDVI:
                     # print(outpath)
                     SRS = DIC_and_TIF().gen_srs_from_wkt(self.wkt())
                     wkg_wgs84 = DIC_and_TIF().wkt_84()
-                    ToRaster().resample_reproj(fpath,outpath,.25,srcSRS=SRS, dstSRS=wkg_wgs84)
+                    ToRaster().resample_reproj(fpath,outpath,.0025,srcSRS=SRS, dstSRS=wkg_wgs84)
+                    # print(outpath)
                     # exit()
+
+    def clip(self):
+        fdir = join(self.this_class_arr,'reproj',self.product)
+        outdir = join(self.this_class_arr,'clip',self.product)
+        #/mnt/sdb2/yang/Global_Resilience/MODIS_download/NDVI_250m_bighorn/arr/bighorn_shp/bighorn_shp
+        shp = join(self.this_class_arr,'bighorn_shp','bighorn_shp')
+        T.mkdir(outdir,force=True)
+        for f in tqdm(T.listdir(fdir)):
+            if not f.endswith('.tif'):
+                continue
+            fpath = join(fdir,f)
+            outpath = join(outdir,f)
+
+            ToRaster().clip_array(fpath,outpath,shp)
+            # T.open_path_and_file(outdir)
+            # exit()
+
+        pass
 
     def statistic(self):
         fdir = join(self.this_class_arr,'reproj',self.product)

@@ -4,7 +4,7 @@ version = sys.version_info.major
 assert version == 3, 'Python Version Error'
 # this_root = '/Users/liyang/Projects_data/Xia_project/'
 # this_root = '/Users/liyang/Projects_data/LAI_extraction/'
-this_root = '/mnt/sdb2/yang/Global_Resilience/data/ERA5/'
+this_root = '/mnt/sdb2/yang/Global_Resilience/'
 # this_root = '/Users/liyang/Desktop/Xia_project/'
 data_root = this_root + 'data/'
 from lytools import *
